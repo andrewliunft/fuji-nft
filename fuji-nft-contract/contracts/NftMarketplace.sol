@@ -2,33 +2,46 @@
 pragma solidity ^0.8.20;
 
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-
-error NftMarketplace__PriceMustBeAboveZero();
-error NftMarketplace__NotApprovedForMarketplace();
-error NftMarketplace__AlreadyListed(address nftAddress, uint256 tokenId);
-error NftMarketplace__NotOwner();
-error NftMarketplace__NotListed(address nftAddress, uint256 tokenId);
-error NftMarketplace__PriceNotMet(address nftAddress, uint256 tokenId, uint256 price);
-error NftMarketplace__NoProceeds();
-error NftMarketplace__TransferFailed();
+import {IJPYC} from "./interface/IJPYC.sol";
 
 contract NftMarketplace is ReentrancyGuard {
+    /////////////////
+    // Errors      //
+    /////////////////
+    error NftMarketplace__PriceMustBeAboveZero();
+    error NftMarketplace__NotApprovedForMarketplace();
+    error NftMarketplace__AlreadyListed(address nftAddress, uint256 tokenId);
+    error NftMarketplace__NotOwner();
+    error NftMarketplace__NotListed(address nftAddress, uint256 tokenId);
+    error NftMarketplace__PriceNotMet(address nftAddress, uint256 tokenId, uint256 price);
+    error NftMarketplace__NoProceeds();
+    error NftMarketplace__TransferFailed();
+
+    /////////////////////////
+    // Type declarations   //
+    /////////////////////////
     struct Listing {
         uint256 price;
         address seller;
     }
 
-    event ItemListed(address indexed seller, address indexed nftAddress, uint256 indexed tokenId, uint256 price);
-
-    event ItemBought(address indexed buyer, address indexed nftAddress, uint256 indexed tokenId, uint256 price);
-
-    event ItemCanceled(address indexed seller, address indexed nftAddress, uint256 indexed tokenId);
-
+    ////////////////////////
+    // State Variables    //
+    ////////////////////////
+    IJPYC private s_jpyc;
     // NFT Contract address -> NFT TokenID -> Listing
     mapping(address => mapping(uint256 => Listing)) private s_listings;
     // Seller address -> Amount earned
     mapping(address => uint256) private s_proceeds;
+
+    /////////////////
+    // Events      //
+    /////////////////
+    event ItemListed(address indexed seller, address indexed nftAddress, uint256 indexed tokenId, uint256 price);
+    event ItemBought(address indexed buyer, address indexed nftAddress, uint256 indexed tokenId, uint256 price);
+    event ItemCanceled(address indexed seller, address indexed nftAddress, uint256 indexed tokenId);
 
     modifier notListed(address nftAddress, uint256 tokenId, address owner) {
         Listing memory listing = s_listings[nftAddress][tokenId];
@@ -38,6 +51,9 @@ contract NftMarketplace is ReentrancyGuard {
         _;
     }
 
+    /////////////////
+    // Modifiers  //
+    /////////////////
     modifier isOwner(address nftAddress, uint256 tokenId, address spender) {
         IERC721 nft = IERC721(nftAddress);
         address owner = nft.ownerOf(tokenId);
@@ -55,7 +71,15 @@ contract NftMarketplace is ReentrancyGuard {
         _;
     }
 
-    /*
+    /////////////////
+    // Functions   //
+    /////////////////
+
+    constructor(address _jpycAddr) {
+        s_jpyc = IJPYC(_jpycAddr);
+    }
+
+    /**
      * @notice Method for listing your NFT on the marketplace
      * @param nftAddress: Address of the NFT
      * @param tokenId: The Token ID of the NFT
@@ -71,9 +95,6 @@ contract NftMarketplace is ReentrancyGuard {
         if (price <= 0) {
             revert NftMarketplace__PriceMustBeAboveZero();
         }
-        // Two ways to list the NFT
-        // 1. Send the NFT to the contract. Transfer -> Contract "hold" the NFT
-        // 2. Owners can still hold their NFT, and give the marketplace approval to sell the NFT for them
         IERC721 nft = IERC721(nftAddress);
         if (nft.getApproved(tokenId) != address(this)) {
             revert NftMarketplace__NotApprovedForMarketplace();
@@ -82,20 +103,27 @@ contract NftMarketplace is ReentrancyGuard {
         emit ItemListed(msg.sender, nftAddress, tokenId, price);
     }
 
-    function buyItem(address nftAddress, uint256 tokenId) external payable nonReentrant isListed(nftAddress, tokenId) {
+    function buyItem(
+        address nftAddress,
+        uint256 tokenId,
+        uint256 validAfter,
+        uint256 validBefore,
+        bytes32 nonce,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external payable nonReentrant isListed(nftAddress, tokenId) {
         Listing memory listedItem = s_listings[nftAddress][tokenId];
         if (msg.value < listedItem.price) {
             revert NftMarketplace__PriceNotMet(nftAddress, tokenId, listedItem.price);
         }
-        s_proceeds[listedItem.seller] += msg.value;
+        s_proceeds[listedItem.seller] += listedItem.price;
+        s_jpyc.transferWithAuthorization(
+            msg.sender, address(this), listedItem.price, validAfter, validBefore, nonce, v, r, s
+        );
         delete (s_listings[nftAddress][tokenId]);
         IERC721(nftAddress).safeTransferFrom(listedItem.seller, msg.sender, tokenId);
-        // check to make sure the NFT was transfered
-
         emit ItemBought(msg.sender, nftAddress, tokenId, listedItem.price);
-
-        // Send the money to the user ✖
-        // Have them withdraw the money ✅
     }
 
     function cancelListing(address nftAddress, uint256 tokenId)
@@ -119,16 +147,21 @@ contract NftMarketplace is ReentrancyGuard {
         emit ItemListed(msg.sender, nftAddress, tokenId, newPrice);
     }
 
-    function withdrawProceeds() external {
+    function withdrawProceeds(uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s)
+        external
+    {
         uint256 proceeds = s_proceeds[msg.sender];
         if (proceeds <= 0) {
             revert NftMarketplace__NoProceeds();
         }
         s_proceeds[msg.sender] = 0;
-        (bool success,) = payable(msg.sender).call{value: proceeds}("");
-        if (!success) {
-            revert NftMarketplace__TransferFailed();
-        }
+        // (bool success,) = payable(msg.sender).call{value: proceeds}("");
+        // if (!success) {
+        //     revert NftMarketplace__TransferFailed();
+        // }
+
+        // TODO: meta transactionでJPYCをこのコントラクトから送金する
+        s_jpyc.receiveWithAuthorization(address(this), msg.sender, proceeds, validAfter, validBefore, nonce, v, r, s);
     }
 
     function getListed(address nftAddress, uint256 tokenId) external view returns (Listing memory) {
