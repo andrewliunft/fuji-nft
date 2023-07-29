@@ -8,16 +8,20 @@ import {
   FormHelperText,
   FormErrorMessage,
 } from "@chakra-ui/react"
-import { ethers } from "ethers"
-import { contractAddressesInterface } from "../types/networkAddress"
-import networkConfig from "../constants/networkMapping.json"
+import { BaseContract, ethers } from "ethers"
 import jpycAbi from "../constants/Jpyc.json"
 import { useLocation } from "react-router-dom"
-import { useChainId, useContract, useContractRead } from "@thirdweb-dev/react"
+import {
+  SmartContract,
+  Web3Button,
+  useChainId,
+  useContract,
+  useContractRead,
+} from "@thirdweb-dev/react"
 import { useContext, useState } from "react"
 import { buildData } from "../utils/prepareMetaTxData"
 import { signMessage } from "../utils/signMessage"
-import { WalletContext } from "../App"
+import { AddressesContext, WalletContext } from "../App"
 import { fromRpcSig } from "ethereumjs-util"
 
 interface UserState {
@@ -25,6 +29,8 @@ interface UserState {
 }
 
 const User: React.FC = () => {
+  const { jpycAddress } = useContext(AddressesContext)
+  const chainId = useChainId()
   const location = useLocation()
   const { wallet } = useContext(WalletContext)
   const { addr: userAddr } = location.state as UserState
@@ -33,21 +39,18 @@ const User: React.FC = () => {
   const [address, setAddress] = useState<string | undefined>(undefined)
   const [error, setError] = useState(false)
 
-  const chainId = useChainId()
-  const addresses: contractAddressesInterface = networkConfig
-  const jpycAddress = chainId ? addresses[chainId]["Jpyc"][0] : ""
-
   const { contract: jpycContaract } = useContract(jpycAddress, jpycAbi)
   const { data: releasableJpyc } = useContractRead(jpycContaract, "balanceOf", [userAddr])
-  if (releasableJpyc && ethers.utils.formatUnits(parseInt(releasableJpyc as string)) !== "0.0") {
-    setWithdrawalButtonUnClickable(false)
-  }
+  //   if (releasableJpyc && parseInt(releasableJpyc as string) / 1e18 !== 0) {
+  //     setWithdrawalButtonUnClickable(false)
+  //   }
 
-  const onSendProceeds = async () => {
+  const onSendProceeds = async (contract: SmartContract<BaseContract>) => {
     if (!address) {
       setError(true)
       return
     }
+    console.log(address)
     const from = userAddr
     const to = address
     const amount = parseInt(releasableJpyc as string).toString()
@@ -55,6 +58,17 @@ const User: React.FC = () => {
     const data = buildData("JPYC Coin", chainId!, jpycAddress, from, to, amount, nonce)
     const signature = (await signMessage(wallet!, data)) as unknown as string
     var { v, r, s } = fromRpcSig(signature)
+    contract.call("transferWithAuthorization", [
+      from,
+      to,
+      amount,
+      "0",
+      ethers.constants.MaxUint256,
+      nonce,
+      v.toString(),
+      r.toString(),
+      s.toString(),
+    ])
   }
 
   return (
@@ -62,11 +76,9 @@ const User: React.FC = () => {
       <Heading as="h4" size="md">
         User Page
       </Heading>
+      <Text>Your Wallet: {userAddr}</Text>
       {releasableJpyc ? (
-        <Text>
-          Amount of JPYC in Your Wallet:{" "}
-          {ethers.utils.formatEther(parseInt(releasableJpyc as string))} JPYC
-        </Text>
+        <Text>Amount of JPYC in Your Wallet: {parseInt(releasableJpyc as string) / 1e18} JPYC</Text>
       ) : (
         <Text>Your wallet does NOT have JPYC</Text>
       )}
@@ -86,9 +98,13 @@ const User: React.FC = () => {
             ) : (
               <FormErrorMessage>Address is required.</FormErrorMessage>
             )}
-            <Button isDisabled={withdrawalButtonUnClickable} top="-0.5" onClick={onSendProceeds}>
+            <Web3Button
+              contractAddress={jpycAddress}
+              contractAbi={jpycAbi}
+              action={async (contract) => await onSendProceeds(contract)}
+            >
               Send
-            </Button>
+            </Web3Button>
           </FormControl>
         </>
       )}
