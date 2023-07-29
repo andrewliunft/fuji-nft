@@ -72,7 +72,7 @@ const config: HardhatUserConfig = {
         },
         admin: {
             default: 1,
-        },
+        }
     },
     mocha: {
         timeout: 1000000, // 200 seconds max

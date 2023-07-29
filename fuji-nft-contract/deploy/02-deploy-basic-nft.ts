@@ -18,19 +18,11 @@ const deployBasicNft: DeployFunction = async function (hre: HardhatRuntimeEnviro
         waitConfirmations: waitBlockConfirmations,
     })
 
-    const basicNftTwo = await deploy("BasicNftTwo", {
-        from: deployer,
-        args: args,
-        log: true,
-        waitConfirmations: waitBlockConfirmations,
-    })
-
     // Verify the deployment
-    if (!developmentChains.includes(network.name) && process.env.ETHERSCAN_API_KEY) {
-        log("Verifying...")
-        await verify(basicNft.address, args)
-        await verify(basicNftTwo.address, args)
-    }
+    // if (!developmentChains.includes(network.name) && process.env.ETHERSCAN_API_KEY) {
+    //     log("Verifying...")
+    //     await verify(basicNft.address, args)
+    // }
     log("----------------------------------------------------")
 }
 
