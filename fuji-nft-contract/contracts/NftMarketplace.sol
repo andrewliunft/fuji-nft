@@ -103,24 +103,19 @@ contract NftMarketplace is ReentrancyGuard {
         emit ItemListed(msg.sender, nftAddress, tokenId, price);
     }
 
-    function buyItem(
-        address nftAddress,
-        uint256 tokenId,
-        uint256 validAfter,
-        uint256 validBefore,
-        bytes32 nonce,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external payable nonReentrant isListed(nftAddress, tokenId) {
+    function buyItem(address nftAddress, uint256 tokenId) external payable nonReentrant isListed(nftAddress, tokenId) {
         Listing memory listedItem = s_listings[nftAddress][tokenId];
         if (msg.value < listedItem.price) {
             revert NftMarketplace__PriceNotMet(nftAddress, tokenId, listedItem.price);
         }
         s_proceeds[listedItem.seller] += listedItem.price;
-        s_jpyc.transferWithAuthorization(
-            msg.sender, address(this), listedItem.price, validAfter, validBefore, nonce, v, r, s
-        );
+        bool success = s_jpyc.transferFrom(msg.sender, address(this), listedItem.price);
+        if (!success) {
+            revert NftMarketplace__TransferFailed();
+        }
+        // s_jpyc.transferWithAuthorization(
+        //     msg.sender, address(this), listedItem.price, validAfter, validBefore, nonce, v, r, s
+        // );
         delete (s_listings[nftAddress][tokenId]);
         IERC721(nftAddress).safeTransferFrom(listedItem.seller, msg.sender, tokenId);
         emit ItemBought(msg.sender, nftAddress, tokenId, listedItem.price);
@@ -147,21 +142,23 @@ contract NftMarketplace is ReentrancyGuard {
         emit ItemListed(msg.sender, nftAddress, tokenId, newPrice);
     }
 
-    function withdrawProceeds(uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s)
-        external
-    {
+    function withdrawProceeds() external {
         uint256 proceeds = s_proceeds[msg.sender];
         if (proceeds <= 0) {
             revert NftMarketplace__NoProceeds();
         }
         s_proceeds[msg.sender] = 0;
+        bool success = s_jpyc.transfer(msg.sender, proceeds);
+        if (!success) {
+            revert NftMarketplace__TransferFailed();
+        }
         // (bool success,) = payable(msg.sender).call{value: proceeds}("");
         // if (!success) {
         //     revert NftMarketplace__TransferFailed();
         // }
 
         // TODO: meta transactionでJPYCをこのコントラクトから送金する
-        s_jpyc.receiveWithAuthorization(address(this), msg.sender, proceeds, validAfter, validBefore, nonce, v, r, s);
+        // s_jpyc.receiveWithAuthorization(address(this), msg.sender, proceeds, validAfter, validBefore, nonce, v, r, s);
     }
 
     function getListed(address nftAddress, uint256 tokenId) external view returns (Listing memory) {
