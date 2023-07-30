@@ -73,7 +73,7 @@ const Home: React.FC<HomeProps> = () => {
             }
           })}
         </Flex>
-        <Web3Button
+        {/* <Web3Button
           contractAddress={nftAddress}
           contractAbi={basicnftAbi}
           action={(contract) => {
@@ -83,7 +83,7 @@ const Home: React.FC<HomeProps> = () => {
           onSuccess={(result) => console.log("success!")}
         >
           mint nft
-        </Web3Button>
+        </Web3Button> */}
       </Box>
     </>
   )

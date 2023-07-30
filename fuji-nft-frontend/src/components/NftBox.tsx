@@ -1,5 +1,4 @@
 import {
-  Button,
   Card,
   CardBody,
   CardFooter,
@@ -12,7 +11,7 @@ import {
 import { truncateStr } from "../utils/truncateStr"
 import { Web3Button, useContract, useContractRead, useContractWrite } from "@thirdweb-dev/react"
 import { useContext, useEffect, useState } from "react"
-import { AddressesContext, WalletContext } from "../App"
+import { AddressesContext } from "../App"
 import basicnftAbi from "../constants/BasicNft.json"
 import jpycAbi from "../constants/Jpyc.json"
 import marketplaceAbi from "../constants/NftMarketplace.json"
@@ -26,7 +25,6 @@ type NftBoxProps = {
 
 const NftBox: React.FC<NftBoxProps> = ({ seller, price, tokenId }) => {
   const { nftAddress, jpycAddress, marketplaceAddress } = useContext(AddressesContext)
-  const { wallet } = useContext(WalletContext)
 
   const [imageURI, setImageURI] = useState<string>("")
   const [tokenName, setTokenName] = useState<string>("")
@@ -95,7 +93,6 @@ const NftBox: React.FC<NftBoxProps> = ({ seller, price, tokenId }) => {
         >
           Buy
         </Web3Button>
-        {/* {userAddr === seller} */}
       </CardFooter>
     </Card>
   )

@@ -15,7 +15,6 @@ import { useContext, useState } from "react"
 import { buildData } from "../utils/prepareMetaTxData"
 import { signMessage } from "../utils/signMessage"
 import { AddressesContext, WalletContext } from "../App"
-import { fromRpcSig } from "ethereumjs-util"
 import jpycAbi from "../constants/Jpyc.json"
 import marketplaceAbi from "../constants/NftMarketplace.json"
 
