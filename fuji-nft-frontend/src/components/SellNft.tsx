@@ -13,6 +13,7 @@ import { AddressesContext } from "../App"
 import { Web3Button, useContract, useContractRead, useContractWrite } from "@thirdweb-dev/react"
 import basicnftAbi from "../constants/BasicNft.json"
 import marketplaceAbi from "../constants/NftMarketplace.json"
+import { ethers } from "ethers"
 
 type SellNftProps = {}
 
@@ -21,6 +22,7 @@ const SellNft: React.FC<SellNftProps> = () => {
 
   const [tokenId, setTokenId] = useState<string | null>(null)
   const [price, setPrice] = useState<string>("0")
+  console.log(ethers.BigNumber.from(ethers.utils.parseUnits(price, 18)))
   const isDisabled = tokenId === null
 
   const { contract: basicnftContract } = useContract(nftAddress, basicnftAbi)
@@ -48,7 +50,13 @@ const SellNft: React.FC<SellNftProps> = () => {
           </NumberInputStepper>
         </NumberInput>
         <Text>Price (JPYC)</Text>
-        <NumberInput width="500px" onChange={(price) => setPrice(price)} value={price} min={0}>
+        <NumberInput
+          width="500px"
+          onChange={(price) => setPrice(price)}
+          value={price}
+          min={0}
+          mb={4}
+        >
           <NumberInputField />
           <NumberInputStepper>
             <NumberIncrementStepper />
@@ -60,7 +68,11 @@ const SellNft: React.FC<SellNftProps> = () => {
           contractAbi={marketplaceAbi}
           action={async (contract) => {
             await approve({ args: [marketplaceAddress, tokenId] })
-            contract.call("listItem", [nftAddress, tokenId, price])
+            contract.call("listItem", [
+              nftAddress,
+              tokenId,
+              ethers.BigNumber.from(ethers.utils.parseUnits(price, 18)),
+            ])
           }}
           isDisabled={isDisabled}
           onError={(error) => console.log(error)}

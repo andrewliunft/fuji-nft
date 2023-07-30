@@ -1,4 +1,4 @@
-import { Box, Heading } from "@chakra-ui/react"
+import { Box, Flex, Heading } from "@chakra-ui/react"
 import { Web3Button } from "@thirdweb-dev/react"
 import { ethers } from "ethers"
 import { useContext, useEffect, useState } from "react"
@@ -27,7 +27,7 @@ const Home: React.FC<HomeProps> = () => {
       wallet?.getProvider()
     )
     const listedNft = await marketplaceContract.getListed(nftAddress, tokenId)
-    console.log(listedNft.seller)
+    console.log(listedNft.price)
     return { price: parseInt(listedNft.price as string).toString(), seller: listedNft.seller }
   }
 
@@ -59,17 +59,20 @@ const Home: React.FC<HomeProps> = () => {
     <>
       <Box mt="5" ml="10">
         <Heading size="md">Listed NFTs</Heading>
-        {listedNfts.map((listedNft, index) => {
-          if (listedNft.seller !== ethers.constants.AddressZero) {
-            return (
-              <NftBox
-                seller={listedNft.seller}
-                price={listedNft.price}
-                tokenId={index.toString()}
-              />
-            )
-          }
-        })}
+        <Flex>
+          {listedNfts.map((listedNft, index) => {
+            if (listedNft.seller !== ethers.constants.AddressZero) {
+              return (
+                <NftBox
+                  seller={listedNft.seller}
+                  price={listedNft.price}
+                  tokenId={index.toString()}
+                  key={index}
+                />
+              )
+            }
+          })}
+        </Flex>
         <Web3Button
           contractAddress={nftAddress}
           contractAbi={basicnftAbi}

@@ -29,7 +29,7 @@ export const buildData = (
   value: string,
   nonce: string,
   validAfter = 0,
-  validBefore = ethers.constants.MaxUint256
+  validBefore = Math.floor(Date.now() / 1000) + 3600
 ) => ({
   primaryType: "TransferWithAuthorization",
   types: { EIP712Domain, TransferWithAuthorization },
